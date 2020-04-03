@@ -6,20 +6,26 @@
 #include<sys/shm.h>
 #include<unistd.h>
 
-void* factorial(void *arg){
+int it = 0;
+pthread_mutex_t signal;
+
+void* operate(void *arg){
+    pthread_mutex_lock(&signal);
     int val = *((int*)arg), i;
-    long long res = 1;
-
-    if(val==0 || val==1)
-        res = 1;
-    else{
-        for(i=0; i<val; i++){
-            res *= (val - i);
-        }
+    long long res = 0;
+    
+    for(i=1; i<=val; i++){
+        res += i;
     }
-    printf("%lld ", res);
 
-    pthread_exit(0);
+    if((it+1) % 5 == 0){
+        printf("%lld\n", res);
+    }else{
+        printf("%lld ", res);
+    }
+    it++;
+    pthread_mutex_unlock(&signal);
+    return NULL;
 }
 
 int main(){
@@ -37,12 +43,14 @@ int main(){
             printf("\n");
     }
 
+    printf("\n");
+
     int count = 0;
 
     for(i=0; i<20; i++){
         int *a = malloc(sizeof(*a));
         *a = res[i];
-        pthread_create(&tid[i], NULL, factorial, a);
+        pthread_create(&tid[i], NULL, operate, a);
         count++;
     }
 
