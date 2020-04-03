@@ -8,6 +8,8 @@
 #include<unistd.h>
 #include<errno.h>
 
+pthread_mutex_t signal;
+
 char *checkExt(char *dir){
     char *ext = strrchr(dir, '.');
     if(ext == dir)
@@ -19,21 +21,21 @@ char *checkName(char *dir, char *ext){
     char *name = strrchr(dir, '/');
     if(name == dir)
         return "";
-    name = name + 1;
+    return name + 1;
 }
 
 void* categorize(void *arg){
+    
     char *srcP = (char *)arg;
     char *srcExt = checkExt(srcP);
     char *srcName = checkName(srcP, srcExt);
-    
-    DIR *dir = opendir(srcExt);
     char *curr = getenv("PWD");
-
+    DIR *dir = opendir(srcExt);
+    // printf("flag\n");
     if(dir == NULL){
         mkdir(srcExt, S_IRWXU);
     }
-
+    // printf("flag\n");
     char *destP = malloc(strlen(srcExt) + 1 + strlen(srcName) + 1 + strlen(curr) + 1);
     strcpy(destP, curr);
     strcat(destP, "/");
@@ -41,9 +43,11 @@ void* categorize(void *arg){
     strcat(destP, "/");
     strcat(destP, srcName);
 
+    pthread_mutex_lock(&signal);
     if(rename(srcP, destP) != 0){
         fprintf(stderr,"error: %s\n",strerror(errno));
     }
+    pthread_mutex_unlock(&signal);
 }
 
 void categorizeFiles(char **arg, int total){
@@ -54,7 +58,7 @@ void categorizeFiles(char **arg, int total){
         pthread_create(&tid[count], NULL, categorize, (void *)arg[i]);
         count++;
     }
-
+    
     for(count=0; count<total; count++){
         pthread_join(tid[count], NULL);
     }
