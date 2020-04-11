@@ -481,3 +481,268 @@ Di client akan menerima dan mencetak sesuai dengan pesan yang diterima dari serv
                 if (strcmp(buffer, "lose")==0) printf ("Game berakhir, kamu kalah\n");
                 else if (strcmp(buffer, "win")==0) printf ("Game berakhir, kamu menang\n");
 ```
+
+3. Pada soal 3, kita diminta untuk mengkategorikan file berdasarkan format. Terdapat 3 kemungkinan penggunaan program ini berdasarkan argumen yang digunakan.
+
+- Argumen **-f**, mengkategorikan file-file yang dinyatakan pathnya setelah -f
+Cara melakukannya adalah sebagai berikut:
+a. Membuat thread sebanyak jumlah file yang dinyatakan pathnya
+b. Thread melakukan fungsi `categorize` di bawah ini untuk tiap path file
+```C
+void* categorize(void *arg){
+    char *src = (char *)arg;                        // source path, can change due to modifications in arg
+    char srcP[150];                                 // source path, doesn't change if arg is modified
+    memcpy(srcP, (char*)arg, 150);
+    char *srcExt = checkExt(src);                   // extension of file yg akan dibuat folder diseragamkan lowercase
+    
+    DIR *dir = opendir(srcExt);
+    if(dir == NULL){
+        mkdir(srcExt, S_IRWXU);
+    }
+
+    char *srcName = checkName(srcP);                // source name + extension
+    char *curr = getenv("PWD");
+    
+    char *destP = malloc(strlen(srcExt) + 1 + strlen(srcName) + 1 + strlen(curr) + 1);
+    strcpy(destP, curr);
+    strcat(destP, "/");
+    strcat(destP, srcExt);
+    strcat(destP, "/");
+    strcat(destP, srcName);
+    
+    pthread_mutex_lock(&signal);
+    if(rename(srcP, destP) != 0){
+        fprintf(stderr,"error: %s\n\n",strerror(errno));
+    }
+    pthread_mutex_unlock(&signal);
+}
+```
+c. Menjoinkan thread
+
+- Argumen **-d**, mengkategorikan file-file di sebuah folder yang pathnya ditulis setelah -d
+Cara melakukannya adalah sebagai berikut:
+a. Membuka direktori yang dimaksud dengan memanggil `opendir()`, menginisiasi struktur pointer dirent untuk mengiterasi direktori tersebut, dan menginisiasi variabel counter untuk menghitung jumlah file yang terdapat di direktori sebagai `threadSize`
+```C
+DIR *fd = opendir(argv[2]);
+struct dirent *dp;
+int threadSize = 0;
+```
+b. Mengiterasi isi direktori dan menentukan tipenya, jika merupakan file, maka `threadSize` ditambah 1.
+```C
+while(((dp = readdir(fd)) != NULL)){
+    if(dp->d_type == DT_REG){
+        threadSize++;
+    }
+}
+```
+c. Memanggil fungsi `categorizeFolder()` yang berisi:
+```C
+void categorizeFolder(char *folderPath, int threadSize){
+    DIR *fd = opendir(folderPath);
+    struct dirent *dp;
+    pthread_t tid[threadSize];
+    int count = 0;
+    
+    while(((dp = readdir(fd)) != NULL)){			// mengiterasi direktori yang dituju sekali lagi dan
+        if(dp->d_type == DT_REG){				// membuat thread categorize untuk masing2 isi bertipe file
+            char *fileName = malloc(strlen(folderPath) + 1 + strlen((char*)(dp->d_name)) + 1);
+            sprintf(fileName, "%s/%s", folderPath, dp->d_name);
+            pthread_create(&tid[count], NULL, categorize, (void *)fileName);
+            count++;
+        }
+    }
+
+    for(count=0; count<threadSize; count++){
+        pthread_join(tid[count], NULL);
+    }
+
+    closedir(fd);
+}
+```
+
+- Argumen **\***, mengkategorikan file-file yang terdapat di current directory
+Cara melakukannya adalah sebagai berikut:
+a. Menentukan current directory
+```C
+char *curr = getenv("PWD");
+```
+b. Membuka current directory dengan memanggil `opendir()`, menginisiasi struktur pointer dirent untuk mengiterasi current directory, dan menginisiasi variabel counter untuk menghitung jumlah file yang terdapat di current directory sebagai `threadSize`.
+```C
+struct dirent *dp;
+DIR *dir = opendir(curr);
+int threadSize = 0;
+```
+c. Mengiterasi isi direktori dan menentukan tipenya, jika merupakan file, maka `threadSize` ditambah 1.
+```C
+while((dp = readdir(dir)) != NULL){
+    if(dp->d_type == DT_REG){
+          threadSize++;
+    }
+}
+```
+d. Memanggil fungsi `categorizeFolder()`
+
+4. Pada soal 4, terdapat 3 permasalahan, 2 di antaranya membutuhkan penggunaan thread.
+***SOAL PERTAMA***
+a. Kita diminta untuk mendefinisikan 2 matriks masing-masing berukuran 4 x 2 dan 2 x 5 dan melakukan operasi perkalian matriks terhadap keduanya. Sebagai satu contoh kita mendefinisikan matriks-matriks tersebut sebagai berikut:
+```C
+int matA[4][2] = {
+                        {2, 2},
+                        {3, 2},
+                        {3, 4},
+                        {1, 3}
+                };
+
+int matB[2][5] = {
+                    {3, 1, 4, 2, 1},
+                    {2, 2, 1, 3, 2}
+                };
+```
+b. Diketahui hasil dari perkalian A(4,2) dan B(2,5) adalah M(4,5), yang berarti terdapat 4 baris, 5 kolom, dan 4 x 5 = 20 elemen.
+c. Kita membuat array data berukuran 20 yang akan menyimpan sementara nilai masing-masing elemen dari matriks hasil.
+d. Array data tersebut diisi dengan elemen matriks A dan elemen matriks B yang akan dikali.
+```C
+for(i=0; i<m; i++){
+    for(j=0; j<p; j++){
+        data = (int*)malloc((20)*sizeof(int));
+        data[0] = o;
+        for(k=0; k<n; k++)
+            data[k+1] = matA[i][k];
+
+        for(k=0; k<o; k++)
+            data[k+n+1] = matB[k][j];
+            
+        pthread_create(&thread[count++], NULL, multiply, (void*)data);
+    }   
+}
+```
+e. Proses pengaliannya dilakukan dengan thread `multiply()` yang dipanggil dengan mem-passing isi array data.
+```C
+void* multiply(void *arg){
+    int *val = (int *)arg;
+    int i, k = 0;
+
+    int x = val[0];
+
+    for(i=1; i<=x; i++)
+        k += val[i]*val[i+x];
+    
+    int *p = (int*)malloc(sizeof(int));
+    
+    *p = k;
+
+    pthread_exit(p);
+}
+```
+f. Karena kita butuh berbagi data matriks hasil perkalian dengan program lain, dibutuhkan pembuatan shared memory untuk matriks hasil tersebut
+```C
+    key_t key = 1234;
+    int shmid = shmget(key, 20*sizeof(int), IPC_CREAT | 0666);
+    res = (int*)shmat(shmid, 0, 0);
+```
+g. Pencetakan matriks hasil dilakukan dengan memanggil argumen data yang telah dipassing di thread `multiply()` sebelumnya
+```C
+    for(i=0; i<max; i++){
+        void *k;
+        pthread_join(thread[i], &k);
+        int *q = (int*)k;
+        printf("%d\t", *q);
+        if((i+1) % p == 0)
+            printf("\n");
+        
+        res[i] = *q;
+    }
+```
+
+***SOAL KEDUA***
+a. Kita diminta untuk mengambil matriks hasil dengan shared memory dari program 4a dan mencetaknya
+```C
+key_t key = 1234;
+int shmid = shmget(key, 20*sizeof(int), IPC_EXCL);
+int *res = (int*)shmat(shmid, 0, 0);
+    
+for(i=0; i<20; i++){
+    printf("%d ", res[i]);
+    if((i+1) % 5 == 0)
+        printf("\n");
+}
+```
+b. Setelah itu, kita diminta untuk mengoperasikan masing-masing elemen matriks hasil dengan menambahkan elemen tersebut dengan nilai yang lebih rendah hingga mencapai nilai = 1. Kita melakukan ini menggunakan thread yang memanggil fungsi `operate()`
+```C
+void* operate(void *arg){
+    pthread_mutex_lock(&signal);
+    int val = *((int*)arg), i;
+    long long res = 0;
+    
+    for(i=1; i<=val; i++){
+        res += i;
+    }
+
+    if((it+1) % 5 == 0){
+        printf("%lld\n", res);
+    }else{
+        printf("%lld ", res);
+    }
+    it++;
+    pthread_mutex_unlock(&signal);
+    return NULL;
+}
+```
+Penggunaan mutex diperlukan agar data yang dicetak bisa beraturan sesuai dengan urutan elemen asli.
+c. Membuat dan menjoinkan thread
+```C
+    for(i=0; i<20; i++){
+        int *a = malloc(sizeof(*a));
+        *a = res[i];
+        pthread_create(&tid[i], NULL, operate, a);
+        count++;
+    }
+
+    for(i=0; i<20; i++){
+        pthread_join(tid[i], NULL);
+    }
+```
+d. Mendetach shared memory yang berbagi data matriks hasil karena telah selesai digunakan di program ini.
+
+***SOAL KETIGA***
+a. Program ini harus dapat mengembalikan jumlah file yang terdapat di current directory menggunakan pipeline.
+b. Program ini ekivalen dengan pengeksekusian command `ls | wc -l` pada terminal.
+c. Pertama, menyimpan masing-masing command sebelum dan sesudah pipeline sebagai data bertipe char**, lalu menggabungkannya.
+```C
+int p[2];
+char *argv_ls[] = {"ls", NULL};
+char *argv_wc[] = {"wc", "-l", NULL};
+
+char **cmd[] = { argv_ls, argv_wc, NULL };
+```
+d. Memanggil fungsi `pipeline()` yang membutuhkan data `char ***cmd`.
+```C
+void pipeline(char ***cmd){
+	int fd[2];					// inisiasi file descriptor read dan write 
+	pid_t pid;
+	int fdd = 0;
+	int files = 0;
+
+	while (*cmd != NULL){
+		pipe(fd);
+        	pid = fork();
+		if (pid < 0) {
+			perror("fork");
+			exit(1);
+		}else if (pid == 0) {			// child process menjalankan argumen pertama
+			dup2(fdd, 0);
+			if (*(cmd + 1) != NULL) {
+				dup2(fd[1], 1);
+			}
+			close(fd[0]);
+			execvp((*cmd)[0], *cmd);
+			exit(1);
+		}else {					// parent process 
+			wait(NULL);
+			close(fd[1]);
+			fdd = fd[0];
+			cmd++;
+		}
+	}
+}
+```
